@@ -65,17 +65,14 @@ func main() {
 		panic(err)
 	}
 
-	if err := syscall.Chdir(chrootRoot); err != nil {
-		panic(err)
-	}
-	if err := syscall.Chroot(chrootRoot); err != nil {
-		panic(err)
-	}
-
 	cmd := exec.Command(command, args...)
 	cmd.Stdin = nullReader{}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Chroot:     chrootRoot,
+		Cloneflags: syscall.CLONE_NEWPID,
+	}
 
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
