@@ -139,11 +139,11 @@ func extractLayer(token, image, digest, rootDir string) error {
 	out, err := os.Create(outPath)
 	defer os.Remove(outPath)
 
-	if err := out.Close(); err != nil {
+	if _, err := io.Copy(out, resp.Body); err != nil {
 		return err
 	}
 
-	if _, err := io.Copy(out, resp.Body); err != nil {
+	if err := out.Close(); err != nil {
 		return err
 	}
 
@@ -186,19 +186,6 @@ func main() {
 			panic(err)
 		}
 	}
-
-	/*commandDir := filepath.Dir(command)
-	commandName := filepath.Base(command)
-	chrootCommandDir := filepath.Join(chrootRoot, commandDir)
-	chrootCommand := filepath.Join(chrootCommandDir, commandName)
-
-	if err := os.MkdirAll(chrootCommandDir, os.ModePerm); err != nil {
-		panic(err)
-	}
-
-	if err := copy(command, chrootCommand); err != nil {
-		panic(err)
-	}*/
 
 	cmd := exec.Command(command, args...)
 	cmd.Stdin = nullReader{}
