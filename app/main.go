@@ -1,9 +1,6 @@
 package main
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -138,46 +135,21 @@ func extractLayer(token, image, digest, rootDir string) error {
 		return fmt.Errorf("failed to get image manifest. Status code: %d", resp.StatusCode)
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
+	outPath := filepath.Join(rootDir, "layer.tar.gz")
+	out, err := os.Create(outPath)
+	defer out.Close()
+
+	if _, err := io.Copy(out, resp.Body); err != nil {
 		return err
 	}
 
-	gzr, err := gzip.NewReader(bytes.NewReader(b))
-	if err != nil {
+	cmd := exec.Command("tar", "-xhf", outPath, "-C", rootDir)
+	cmd.Stdin = nullReader{}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
 		return err
-	}
-	defer gzr.Close()
-
-	tr := tar.NewReader(gzr)
-	for {
-		header, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		path := filepath.Join(rootDir, header.Name)
-		info := header.FileInfo()
-		if info.IsDir() {
-			if err = os.MkdirAll(path, info.Mode()); err != nil {
-				return err
-			}
-			continue
-		}
-
-		file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		_, err = io.Copy(file, tr)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -211,7 +183,7 @@ func main() {
 		}
 	}
 
-	commandDir := filepath.Dir(command)
+	/*commandDir := filepath.Dir(command)
 	commandName := filepath.Base(command)
 	chrootCommandDir := filepath.Join(chrootRoot, commandDir)
 	chrootCommand := filepath.Join(chrootCommandDir, commandName)
@@ -222,7 +194,7 @@ func main() {
 
 	if err := copy(command, chrootCommand); err != nil {
 		panic(err)
-	}
+	}*/
 
 	cmd := exec.Command(command, args...)
 	cmd.Stdin = nullReader{}
@@ -234,6 +206,8 @@ func main() {
 	}
 
 	if err := cmd.Run(); err != nil {
+		fmt.Printf("%s\n", err.Error())
+
 		var exitErr *exec.ExitError
 		if ok := errors.As(err, &exitErr); ok {
 			os.Exit(exitErr.ExitCode())
