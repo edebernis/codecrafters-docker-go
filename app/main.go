@@ -84,7 +84,11 @@ type layer struct {
 
 func fetchManifest(token, image string) (manifestResponse, error) {
 	imageSplit := strings.Split(image, ":")
-	url := fmt.Sprintf("https://registry.hub.docker.com/v2/library/%s/manifests/%s", imageSplit[0], imageSplit[1])
+	tag := "latest"
+	if len(imageSplit) == 2 {
+		tag = imageSplit[1]
+	}
+	url := fmt.Sprintf("https://registry.hub.docker.com/v2/library/%s/manifests/%s", imageSplit[0], tag)
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
