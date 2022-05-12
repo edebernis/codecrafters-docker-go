@@ -137,7 +137,11 @@ func extractLayer(token, image, digest, rootDir string) error {
 
 	outPath := filepath.Join(rootDir, "layer.tar.gz")
 	out, err := os.Create(outPath)
-	defer out.Close()
+	defer os.Remove(outPath)
+
+	if err := out.Close(); err != nil {
+		return err
+	}
 
 	if _, err := io.Copy(out, resp.Body); err != nil {
 		return err
