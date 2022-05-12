@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -137,7 +138,12 @@ func extractLayer(token, image, digest, rootDir string) error {
 		return fmt.Errorf("failed to get image manifest. Status code: %d", resp.StatusCode)
 	}
 
-	gzr, err := gzip.NewReader(resp.Body)
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	gzr, err := gzip.NewReader(bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -153,24 +159,24 @@ func extractLayer(token, image, digest, rootDir string) error {
 			return err
 		}
 
-		target := filepath.Join(rootDir, header.Name)
+		path := filepath.Join(rootDir, header.Name)
+		info := header.FileInfo()
+		if info.IsDir() {
+			if err = os.MkdirAll(path, info.Mode()); err != nil {
+				return err
+			}
+			continue
+		}
 
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if _, err := os.Stat(target); err != nil {
-				if err := os.MkdirAll(target, 0755); err != nil {
-					return err
-				}
-			}
-		case tar.TypeReg:
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
-			if err != nil {
-				return err
-			}
-			if _, err := io.Copy(f, tr); err != nil {
-				return err
-			}
-			f.Close()
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		_, err = io.Copy(file, tr)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -183,12 +189,11 @@ func main() {
 	command := os.Args[3]
 	args := os.Args[4:len(os.Args)]
 
-	dir, err := ioutil.TempDir("/tmp", "docker")
+	chrootRoot, err := ioutil.TempDir("", "docker")
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(dir)
-	chrootRoot := filepath.Join("/tmp", dir)
+	defer os.RemoveAll(chrootRoot)
 
 	token, err := registryLogin(image)
 	if err != nil {
